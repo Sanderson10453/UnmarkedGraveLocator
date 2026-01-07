@@ -1,72 +1,70 @@
 # unmarked-graves
-<b> Description: </b> Current methods to find unmarked gravesites require being on the ground and often take lots of time and energy - these methods include ground penatrating radar, word of mouth, and/or noticing soft ground underfoot. Given how many unmarked gravesites may exist, these methods for an initial sweep of areas is unfeasible. We're working on a model that allows the use of various aerial and satelite imagery to highlight areas that may contain unmarked graves. This model would be able to investigate large swaths of land to help improve the speed at which unmarked gravesites are identified.
+<b> Description: </b> To find unmarked gravesites, the most accurate methods include ground penatrating radar, direct knowledge of a gravesite, and/or someone noticing soft ground underfoot. While these methods high have accuracy,  given the sheer number of unmarked gravesites, thes methods may not be feasible for uncovering large numbers of gravesites. This model aims to serve as an initial sweep - this would need follow-up by ground penetrating radar, group sweeps, or other methods to confirm preliminary findings - of areas suspected of having unmarked gravesites. Through the use of aerial LiDAR, which is readily availble, this model would allow individuals, groups, and researchers to investigate large swaths of land to help improve the speed at which unmarked gravesites are identified.
+
+<b> Note: </b> The current model has a focus on Florida. As more work and contributions to the model are made, we will expand the areas the model works. 
 
 ## Model Framework
-Previous research has highlighted how the Red-Amber-Green (RAG) method can help with identification of unmarked graves [^1]. With this in mind, we're updating our current model - based primarily on statistically lower elevation - to include an index that will be used to inform our RAG prioritization system. This new system will classify areas as Red, Amber, or Green, in respect to liklihood of unmarked graves.
+Previous research has highlighted how the Red-Amber-Green (RAG) method has been used to help with identification of unmarked graves[^1,^2]. With this in mind, our current model builds an index that will be used to inform our RAG prioritization system. This new system will classify areas as Red, Amber, or Green, in respect to liklihood of unmarked graves. In the RAG model, the following is true:
+	- <b> Red </b>
+	- <b> Amber </b>
+	- <b> Green </b>
 
-### 1. Absolute Elevation Difference
-Our current model is built around finding sites within a LiDAR cloud that have a ground elevation that is statistically lower than other points. Given how flat Florida is, this will find sites that could be burial sites.
+Within our model, the following components are used to power our index. 
 
+### 1. Historical Relevance
+The initial part of the index takes into account a site's proximity to a place of worship or cultural landmark. Our initial model seeks to find, primarily, unmarked African-American gravesites; these sites tend to be  near church/temples/mosques or other places of worship. For this reason, we give the most value to gravesites that are located within a quarter mile (1,320 feet) of a religious site, and those within a half mile (2,640 feet) of a religious site getting the next set of weighting. 
 
-### 2. Geomorphon Classification
-The next part of the model - geomorphon classification -  aims to further filter sites beyond just elevation. Through geomorphon classifying LiDAR clouds, we can classify our areas into the most common landforms:
-	
-	- Peak 
-	- ridge
-	- shoulder
-	- spur
-	- slope
-	- hollow
-	- footslope
-	- valley
-	- pit
-	- and, flat 
+For our list of historical sites, we use data from the Florida Master Site File (FMSF). <b> This dataset requires authorization from Florida Divison of Historical Records (part of the Department of State) - this can be done at this [site](https://dos.fl.gov/historical/preservation/master-site-file/documents-forms/), specifically with this [form](https://dos.fl.gov/media/708884/guide_structure_v50.pdf). Once you've been granted access - you will use the path to the files in the model. If you are having issues/or have privacy issues with accessing the data, please reach out to us! </b>
 
-For our sake, we are interested in identifying places that are slopes. 
+### 2. Absolute Elevation Difference
+The model uses elevation (z-values) from LiDAR .las files to search for areas (with a size estimate of around 4 feet) that are noticeably lower elevation than the areas around it. This works as Florida is, generally, exceptionally flat. After finding these areas, the model delves deeper to ensure that these areas are not just "noise" from the LiDAR file. 
 
-### 3. Historical Relevance
-The final part of the index takes into account a site's proximity to a place of worship or cultural landmark. Generally speaking, people are buried near church/temples/mosques or other places of worship - sites within 100 yards of a place of worhsip or cultural landmark will receive weight in our index.
+Once it has identified these lower elevation areas, these areas are considered in the next step of the index.
+
+### 3. Topological Classification
+Finally, the current model uses topological classification to further add to the index as to what may be an unmarked gravesite. Again, as this model is based on terrain in Florida - tolerances are coded with reasonably flat terrain in mind. When checking topology, the model looks for areas that are: concave, as these areas would signify downward sloping due to an unmarked grave underfoot; and, slightly sloped, as this could be an area with multiple graves.
 
 
-## Config Steps (Tested on EC2 : unmarked-graves-fl)
-1. Download Grass GIS
-	- sudo apt install grass grass-dev
-		- has a y/n 
-2. Once downloaded, be sure to install the r.in.pdal extension
-	- grass --tmp-location EPSG:4326 --exec g.extension extension=r.in.pdal
-3. Download Conda
-	- mkdir -p ~/miniconda3
-	- wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-	- bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-	- rm ~/miniconda3/miniconda.sh
-4. Create Conda Environment
-	- source ~/miniconda3/bin/activate
-	- conda init
-	- Refresh the shell (figure out)
-	- conda create -n "lidarvenv" python=3.14.0
-		Ask for TOS
-		- (A)ccept/(R)eject/(V)iew
-		- (A)ccept/(R)eject/(V)iew, again
-		- Proceed Y/N
-	- Figure out how to have conda auto accept terms and conditions
-		- https://www.anaconda.com/docs/getting-started/tos-plugin
-		- https://stackoverflow.com/questions/56100217/how-to-accept-the-license-agreement-when-building-rti-connext-dds-5-3-1-with-doc?noredirect=1
-5. Ensure pip is installed
-	- conda deactivate
-	- sudo apt update
-	- sudo apt upgrade
-	- sudo apt install python3-pip
-6. Install packages into conda environment
-	- conda activate lidarvenv
-	- conda install conda-forge::pdal py-pdal
-	- pip install -r requirements.txt	(Havent done in EC2)
-7. Activate the conda environment and run the grass gis standalone script
-8. r.denoise
-	- Requires mdenoise
-	- On windows, needs g++
-	- Might need to download MSYS2
-	- Need toolkit
-		- pacman -S --needed base-devel mingw-w64-x86_64-toolchain
+### Output
+Once run, the model will consider the previously mentioned factors to then create a shapefile of areas it believes may fall into the category of Red, high likelihood of an unmarked grave, and Amber, probable likelihood of an unmarked grave. This areas that comprise this shapefile are printed to a text file as X-Y coordinates that can then be further investigated. 
+
+
+## Setup
+To setup the model, we've found that using a Docker container is the easiest way - more information on Docker can be found [here](https://www.docker.com/get-started). For users who are new to Docker, I recommend using [Docker Desktop](https://www.docker.com/products/docker-desktop/), as its inferace is more user friendly and presents users with prompts.
+
+To being with, you will want to clone this git repo - using the following code:
+
+1. You should navigate to the location you want to download the files to:
+
+```
+cd /path/to/directory/
+```
+
+2. Once in that director, run the following command to clone the repo: 
+
+```
+git clone https://
+```
+
+3. Once you have the repo cloned and all the files, you will need to navigate into the git repo/directory :
+```
+cd ./git-repo-dir
+```
+
+4. Now, you will build the docker container :
+```
+docker build --tag unmarked_graves_grass
+docker run --detach unmarked_graves_grass
+```
+
+5. Check that this ran correctly - you should see an item called "unmarked_graves_grass":
+```
+docker container ls
+```
+
+<b> Note: </b> Linux/Mac users may have to add sudo in front of docker commands
+
+## Running the Model
 
 
 ## License
@@ -74,3 +72,5 @@ MIT Licensed
 
 
 [^1]: Geomorphological and geoforensic interpretation of maps, aerial imagery, conditions of diggability and the colour-coded RAG prioritization system in searches for criminal burials, Laurance Donnelly; Mark Harrison, 2013
+
+[^2]:  A GIS-based Quantitative Approach for the Search of Clandestine Graves, Italy , Roberta Somma, Maria Cascio, et. al. 2017
