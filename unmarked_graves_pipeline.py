@@ -316,6 +316,24 @@ class UnmarkedGraves(GrassConfigs):
            ,overwrite = True
         )
 
+        # Widening these final areas
+        # self.gs.run_command(
+        #     'r.grow'
+        #     ,input = 'diff_fin'
+        #     ,output = 'diff_fin_wide'
+        #     ,radius = 3
+        #     ,metric = 'euclidean'
+        #     ,overwrite = True
+        # )
+        self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'diff_fin'
+                    ,output = 'diff_fin_wide'
+                    ,method = 'minimum'
+                    ,size = 5
+                    ,overwrite = True
+            )
+
         ## Removing layers if low memory
         if low_memory == True:
             self.gs.run_command(
@@ -399,7 +417,7 @@ class UnmarkedGraves(GrassConfigs):
             ,input=f'{self.clean_fname[-15:]}_mean'
             ,output = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
             ,method = 'average'
-            ,size = 5
+            ,size = 3
             ,weighting_function = 'gaussian'
             ,weighting_factor = 1
         )
@@ -410,7 +428,7 @@ class UnmarkedGraves(GrassConfigs):
                 'r.param.scale'
                 ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
                 ,output = f'{self.clean_fname[-15:]}_profc_temp'
-                ,size = 5 
+                ,size = 3 
                 ,method = 'profc'
                 ,overwrite = True  
             )
@@ -419,7 +437,7 @@ class UnmarkedGraves(GrassConfigs):
                 'r.param.scale'
                 ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
                 ,output = f'{self.clean_fname[-15:]}_planc_temp'
-                ,size = 5 
+                ,size = 3 
                 ,method = 'planc'
                 ,overwrite = True  
             )
@@ -428,7 +446,7 @@ class UnmarkedGraves(GrassConfigs):
                 'r.param.scale'
                 ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
                 ,output = f'{self.clean_fname[-15:]}_slope_temp'
-                ,size = 5 
+                ,size = 3 
                 ,method = 'slope'
                 ,overwrite = True  
             )
@@ -436,6 +454,16 @@ class UnmarkedGraves(GrassConfigs):
             self.gs.run_command(
                     'r.mapcalc',
                     expression = f'pit_basin_filter = ({self.clean_fname[-15:]}_profc_temp < 0.0) & ({self.clean_fname[-15:]}_planc_temp > 0.0) & ({self.clean_fname[-15:]}_slope_temp < 0.5)'
+            )
+
+            # Widening the area
+            self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'pit_basin_filter'
+                    ,output = 'pit_basin_filter_wide'
+                    ,method = 'maximum'
+                    ,size = 5
+                    ,overwrite = True
             )
 
             ## Removing layers        
@@ -451,7 +479,7 @@ class UnmarkedGraves(GrassConfigs):
             'r.param.scale'
             ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
             ,output = f'{self.clean_fname[-15:]}_profc'
-            ,size = 5 
+            ,size = 3 
             ,method = 'profc'
             ,overwrite = True  
         )
@@ -460,7 +488,7 @@ class UnmarkedGraves(GrassConfigs):
                 'r.param.scale'
                 ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
                 ,output = f'{self.clean_fname[-15:]}_planc'
-                ,size = 5 
+                ,size = 3 
                 ,method = 'planc'
                 ,overwrite = True  
             )
@@ -469,7 +497,7 @@ class UnmarkedGraves(GrassConfigs):
                 'r.param.scale'
                 ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
                 ,output = f'{self.clean_fname[-15:]}_slope'
-                ,size = 5 
+                ,size = 3 
                 ,method = 'slope'
                 ,overwrite = True  
             )
@@ -477,6 +505,16 @@ class UnmarkedGraves(GrassConfigs):
             self.gs.run_command(
                     'r.mapcalc',
                     expression = f'pit_basin_filter = ({self.clean_fname[-15:]}_profc < 0.0) & ({self.clean_fname[-15:]}_planc > 0.0) & ({self.clean_fname[-15:]}_slope < 0.5)'
+            )
+
+            # Widening the area
+            self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'pit_basin_filter'
+                    ,output = 'pit_basin_filter_wide'
+                    ,method = 'maximum'
+                    ,size = 5
+                    ,overwrite = True
             )
 
 
@@ -502,13 +540,23 @@ class UnmarkedGraves(GrassConfigs):
         # Step 2: Filtering on Elevation and Topology
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = 'red_sites = pit_basin_filter == 1 & diff == 0'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'red_sites = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 3: Remove the Mask
         self.gs.run_command(
             'r.mask'
             ,flags = 'r'
+        )
+
+        # Step 4: Grow the Spots
+        self.gs.run_command(
+            'r.grow'
+            ,input = 'red_sites'
+            ,output = 'red_sites_grow'
+            ,radius = 3
+            ,metric = 'euclidean'
+            ,overwrite = True
         )
 
         ## Part 2: Amber Sites
@@ -521,7 +569,7 @@ class UnmarkedGraves(GrassConfigs):
         # Step 2: Filtering on Elevation and Topology -- Figure out the next category
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = 'amber_sites_0 = pit_basin_filter == 1 & diff == 0'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'amber_sites_0 = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 3: Remove Initial Mask
@@ -539,7 +587,7 @@ class UnmarkedGraves(GrassConfigs):
         # Step 5: Filtering on Elevation and Topology that is the highest category
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = 'amber_sites_1 = pit_basin_filter == 1 & diff == 0'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'amber_sites_1 = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 6: Remove Mask
@@ -555,7 +603,17 @@ class UnmarkedGraves(GrassConfigs):
             ,output = 'amber_sites'
         )
 
-        ## Step 8: Write files
+        # Step 8: Grow them to be visible
+        self.gs.run_command(
+            'r.grow'
+            ,input = 'amber_sites'
+            ,output = 'amber_sites_grow'
+            ,radius = 3
+            ,metric = 'euclidean'
+            ,overwrite = True 
+        )
+
+        ## Step 9: Write files
         self.gs.run_command(
             'r.out.xyz'
             ,input = 'red_sites'
@@ -601,7 +659,7 @@ ug.setup_grass_env(
 fmsf = Path(r"C:\Users\Spens\Documents\Work + Internship Materials\Consulting\GullahGeechee\Arcmap_Basefiles\FMSF\Spenser\Duval\Duval_Sites.shp").resolve()
 ug.historical_sites_check(historical_file = fmsf)
 ug.elevation_check()
-# ug.topology_check(low_memory= True)
+ug.topology_check(low_memory= True)
 
 #%% Ranking
 ug.rag_ranking(low_memory= True)
