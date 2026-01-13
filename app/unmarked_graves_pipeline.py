@@ -6,7 +6,6 @@
 
 #########################################################
 
-#%% Import modules
 
 #Path
 from pathlib import Path
@@ -26,6 +25,9 @@ import numpy as np
 #Timing
 import time
 
+# For cli
+import argparse
+
 
 # Getting grass python
 class GrassConfigs:
@@ -37,7 +39,7 @@ class GrassConfigs:
     # If Windows
     elif os.name =='nt':
         grass_cmd = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat', "--config", "python_path"] 
-        GRASS_PY_PATH = subprocess.check_output(["grass", "--config", "python_path"], text=True, shell=True).strip()
+        GRASS_PY_PATH = subprocess.check_output(grass_cmd, text=True, shell=True).strip()
     
     #Add Mac
     else: 
@@ -165,12 +167,12 @@ class UnmarkedGraves(GrassConfigs):
 
         #Creating a proper path from param
         if historical_file is None:
-            fmsf = Path(r'')    # Post the FMSF in gitlab
+            fmsf = Path(f'{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}').resolve()    # Post the FMSF in gitlab
         
         if isinstance(historical_file, Path):
             fmsf = historical_file
 
-        else:
+        elif isinstance(historical_file, str):
             fmsf = Path(historical_file)
 
         if overwrite == False:
@@ -188,8 +190,7 @@ class UnmarkedGraves(GrassConfigs):
 
             ## Adding the Buffer
             #Gettng Vector Map Name
-            slash_idx = str(fmsf).rfind('/')
-            self.vector_map_fname = str(fmsf)[(slash_idx +1) :-4]
+            self.vector_map_fname = fmsf.stem
 
             #Runing the command
             self.gs.run_command(
@@ -215,8 +216,9 @@ class UnmarkedGraves(GrassConfigs):
         
 
     def elevation_check(self
-                        ,lidar_file : str|Path
-                        ,denoise = True):        
+                        ,denoise = True
+                        ,low_memory = True
+                        ,overwrite = False):        
         """
         This method will be the pipeline component for the next component of our RAG model - does an area have lower elevation than the areas 
             around it?
@@ -226,10 +228,9 @@ class UnmarkedGraves(GrassConfigs):
             lidar_file        
         
         Parameters:
-        ---------
-            lidar_file: The LiDAR file that will be used for elevation and Topo tests.
-            
+        ---------            
             denoise: True, will use the neighbors to normalize the lidar data
+            overwrite: Default - False; if true, will overwrite previous elevation layers of the same name
 
         Notes:
             On approaches -
@@ -240,12 +241,12 @@ class UnmarkedGraves(GrassConfigs):
         """
 
         # LiDAR File Attribute
-        self.lidar_file = lidar_file
+        # self.lidar_file = lidar_file
 
         # File Name without Ext
-        slash_idx = str(self.fname).rfind('/')
-        self.clean_fname = str(self.fname)[(slash_idx +1) :-4]
-        self.clean_path = str(self.fname)[:slash_idx]
+        self.clean_fname = self.lidar_file.stem
+        self.clean_path = self.lidar_file.stem
+        self.clean_parent = self.lidar_file.parent
 
 
         ## Creating list of maps in mapset
@@ -254,17 +255,17 @@ class UnmarkedGraves(GrassConfigs):
         ## Elevation Testing
 
         # Check if file exists
-        if f'{self.clean_fname[-15:]}_min' in map_ls : 
+        if f'{self.clean_fname[-15:]}_mean' in map_ls : 
             print('Elevation Layer Exists')
         else:
             ## Reading the las
             self.gs.run_command(
                 "r.in.pdal"
-                ,input = lidar_file
-                ,method = 'min'
+                ,input = self.lidar_file
+                ,method = 'mean'
                 ,overwrite = True
-                ,resolution = 2
-                ,output = f'{self.clean_fname[-15:]}_min'   #The results of the min seem better
+                ,resolution = 1
+                ,output = f'{self.clean_fname[-15:]}_mean'  
 
             )
 
@@ -273,19 +274,70 @@ class UnmarkedGraves(GrassConfigs):
         ## Minimum Output
         self.gs.run_command(
             'r.neighbors'
-            ,input=f'{self.clean_fname[-15:]}_min'
-            ,output = f'{self.clean_fname[-15:]}_min_neighbor'
-            ,method = 'min'
-            ,size = 7
+            ,input=f'{self.clean_fname[-15:]}_mean'
+            ,output = f'{self.clean_fname[-15:]}_mean_neighbor'
+            ,method = 'average'
+            ,size = 15
+            ,weighting_function = 'gaussian'
+            ,weighting_factor = 1
+            ,overwrite = True
         )
 
         ## Comparing Between Original DEM 
         # Calculation
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = f"diff = {self.clean_fname[-15:]}_min - {self.clean_fname[-15:]}_min_neighbor"
+            ,expression = f"diff = {self.clean_fname[-15:]}_mean - {self.clean_fname[-15:]}_mean_neighbor"
+            ,overwrite = True
                     )
-                
+        
+        ## Checking out Interesting Differences
+        # What's noise vs real?
+        self.gs.run_command(
+            'r.mapcalc'
+            ,expression = "diff_deeper = if(diff >= 0.15 && diff <= 0.8, 1, null())"
+            ,overwrite = True
+                    )
+        # If there's a bunch of cells that are low, it's probably true
+        self.gs.run_command(
+            'r.neighbors'
+            ,input = 'diff_deeper'
+            ,output = 'diff_cnt'
+            ,method = 'count'
+            ,size = 3
+            ,overwrite = True
+                )
+
+        # Final Areas that are lower than neighbors, accounting for noise
+        self.gs.run_command(
+            'r.mapcalc'
+            ,expression = "diff_fin = if(diff_cnt >= 5, diff, null())"
+           ,overwrite = True
+        )
+
+        # Widening these final areas
+        self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'diff_fin'
+                    ,output = 'diff_fin_wide'
+                    ,method = 'minimum'
+                    ,size = 5
+                    ,overwrite = True
+            )
+
+        ## Removing layers if low memory
+        if low_memory == True:
+            self.gs.run_command(
+                'g.remove'
+                ,type = 'raster'
+                ,name = f'{self.clean_fname[-15:]}_mean_neighbor'
+            )
+
+            self.gs.run_command(
+                'g.remove'
+                ,type = 'raster'
+                ,pattern = '*_tmp'
+            )
     
     
     def topology_check(self, low_memory = True):
@@ -335,6 +387,7 @@ class UnmarkedGraves(GrassConfigs):
             ,e=extent_dict['e']
             ,t=extent_dict['t']
             ,b=extent_dict['b']
+            ,grow = 5280
         )
 
 
@@ -343,55 +396,120 @@ class UnmarkedGraves(GrassConfigs):
         self.gs.run_command(
             "r.in.pdal"
             ,input = self.lidar_file
-            ,method = 'min'
+            ,method = 'mean'
             ,overwrite = True
-            ,resolution = 2
-            ,output = f'{self.clean_fname[-15:]}_min'   #The results of the min seem better
+            ,resolution = 1
+            ,output = f'{self.clean_fname[-15:]}_mean'   
         )
 
        # De-noising
         self.gs.run_command(
             'r.neighbors'
-            ,input=f'{self.clean_fname[-15:]}_min'
-            ,output = f'{self.clean_fname[-15:]}_min_neighbor_gaus'
+            ,input=f'{self.clean_fname[-15:]}_mean'
+            ,output = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
             ,method = 'average'
-            ,size = 5
+            ,size = 3
             ,weighting_function = 'gaussian'
             ,weighting_factor = 1
         )
+
         ## Topology Check
-        self.gs.run_command(
+        if low_memory == True:
+            self.gs.run_command(
+                'r.param.scale'
+                ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
+                ,output = f'{self.clean_fname[-15:]}_profc_temp'
+                ,size = 3 
+                ,method = 'profc'
+                ,overwrite = True  
+            )
+
+            self.gs.run_command(
+                'r.param.scale'
+                ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
+                ,output = f'{self.clean_fname[-15:]}_planc_temp'
+                ,size = 3 
+                ,method = 'planc'
+                ,overwrite = True  
+            )
+
+            self.gs.run_command(
+                'r.param.scale'
+                ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
+                ,output = f'{self.clean_fname[-15:]}_slope_temp'
+                ,size = 3 
+                ,method = 'slope'
+                ,overwrite = True  
+            )
+
+            self.gs.run_command(
+                    'r.mapcalc',
+                    expression = f'pit_basin_filter = ({self.clean_fname[-15:]}_profc_temp < 0.0) & ({self.clean_fname[-15:]}_planc_temp > 0.0) & ({self.clean_fname[-15:]}_slope_temp < 0.5)'
+            )
+
+            # Widening the area
+            self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'pit_basin_filter'
+                    ,output = 'pit_basin_filter_wide'
+                    ,method = 'maximum'
+                    ,size = 5
+                    ,overwrite = True
+            )
+
+            ## Removing layers        
+            self.gs.run_command(
+                'g.remove'
+                ,type = 'raster'
+                ,pattern = '*_temp'
+                ,quiet = True
+            )
+
+        else:
+            self.gs.run_command(
             'r.param.scale'
-            ,input = f'{self.clean_fname[-15:]}_min_neighbor_gaus'
+            ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
             ,output = f'{self.clean_fname[-15:]}_profc'
-            ,size = 5 
+            ,size = 3 
             ,method = 'profc'
             ,overwrite = True  
         )
 
-        self.gs.run_command(
-            'r.param.scale'
-            ,input = f'{self.clean_fname[-15:]}_min_neighbor_gaus'
-            ,output = f'{self.clean_fname[-15:]}_planc'
-            ,size = 5 
-            ,method = 'planc'
-            ,overwrite = True  
-        )
+            self.gs.run_command(
+                'r.param.scale'
+                ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
+                ,output = f'{self.clean_fname[-15:]}_planc'
+                ,size = 3 
+                ,method = 'planc'
+                ,overwrite = True  
+            )
 
-        self.gs.run_command(
-            'r.param.scale'
-            ,input = f'{self.clean_fname[-15:]}_min_neighbor_gaus'
-            ,output = f'{self.clean_fname[-15:]}_slope'
-            ,size = 5 
-            ,method = 'slope'
-            ,overwrite = True  
-        )
+            self.gs.run_command(
+                'r.param.scale'
+                ,input = f'{self.clean_fname[-15:]}_mean_neighbor_gaus'
+                ,output = f'{self.clean_fname[-15:]}_slope'
+                ,size = 3 
+                ,method = 'slope'
+                ,overwrite = True  
+            )
 
-        self.gs.run_command(
-                'r.mapcalc',
-                expression = f'pit_basin_filter = ({self.clean_fname[-15:]}_profc < 0.0) & ({self.clean_fname[-15:]}_planc > 0.0) & ({self.clean_fname[-15:]}_slope < 0.5)'
-        )
-    def rag_ranking(self, low_memory):
+            self.gs.run_command(
+                    'r.mapcalc',
+                    expression = f'pit_basin_filter = ({self.clean_fname[-15:]}_profc < 0.0) & ({self.clean_fname[-15:]}_planc > 0.0) & ({self.clean_fname[-15:]}_slope < 0.5)'
+            )
+
+            # Widening the area
+            self.gs.run_command(
+                    'r.neighbors'
+                    ,input= 'pit_basin_filter'
+                    ,output = 'pit_basin_filter_wide'
+                    ,method = 'maximum'
+                    ,size = 5
+                    ,overwrite = True
+            )
+
+
+    def rag_ranking(self, low_memory = True, shapefile = False, text_file = True):
         """
         This is the final method to group the areas into 3 categories:
             1. Red, where we believe there are potential unmarked graves
@@ -413,13 +531,23 @@ class UnmarkedGraves(GrassConfigs):
         # Step 2: Filtering on Elevation and Topology
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = f'red_sites = (pit_basin_filter = 1 & diff = 0)'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'red_sites = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 3: Remove the Mask
         self.gs.run_command(
             'r.mask'
             ,flags = 'r'
+        )
+
+        # Step 4: Grow the Spots
+        self.gs.run_command(
+            'r.grow'
+            ,input = 'red_sites'
+            ,output = 'red_sites_grow'
+            ,radius = 3
+            ,metric = 'euclidean'
+            ,overwrite = True
         )
 
         ## Part 2: Amber Sites
@@ -432,7 +560,7 @@ class UnmarkedGraves(GrassConfigs):
         # Step 2: Filtering on Elevation and Topology -- Figure out the next category
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = f'amber_sites_0 = (pit_basin_filter = 1 & diff = 0)'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'amber_sites_0 = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 3: Remove Initial Mask
@@ -450,7 +578,7 @@ class UnmarkedGraves(GrassConfigs):
         # Step 5: Filtering on Elevation and Topology that is the highest category
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = f'amber_sites_1 = (pit_basin_filter = 1 & diff = 0)'  # Getting the sites that are the lowest and basins, within our mask
+            ,expression = 'amber_sites_1 = if(pit_basin_filter_wide == 1 && diff_fin_wide < 1, 1, null())'  # Getting the sites that are the lowest and basins, within our mask
         )
 
         # Step 6: Remove Mask
@@ -462,28 +590,86 @@ class UnmarkedGraves(GrassConfigs):
         # Step 7: Append the Sites
         self.gs.run_command(
             'r.patch'
-            ,input = 'amber_sites_0, amber_sites_1'
+            ,input = 'amber_sites_0,amber_sites_1'
             ,output = 'amber_sites'
         )
 
-        ## Step 8: Write files
+        # Step 8: Grow them to be visible
         self.gs.run_command(
-            'r.out.gdal'
-            ,input = 'red_sites'
-            ,output =f'{self.clean_path}/red_sites.geotiff'
-            ,format = 'GTiff'
-        )
-
-        self.gs.run_command(
-            'r.out.gdal'
+            'r.grow'
             ,input = 'amber_sites'
-            ,output =f'{self.clean_path}/amber_sites.geotiff'
-            ,format = 'GTiff'
+            ,output = 'amber_sites_grow'
+            ,radius = 3
+            ,metric = 'euclidean'
+            ,overwrite = True 
         )
-#%% Testing
-# Does the startup work?
-ug = UnmarkedGraves()
-ug.setup_grass_env(lidar_fname= Path(r'/media/spense/Samsung USB/lidar/USGS_LPC_FL_Peninsular_FDEM_2018_D19_DRRA_LID2019_218755_E.las')
-                        ,proj_path= Path('/home/spense/Documents/ConsultingWork/grass-projects/unmarkedgraves-test/unmarked-graves-jax-test/emmett-reed'))
-maps = ug.list_maps()
-print(maps)
+        if text_file == True:
+            ## Step 9: Write files
+            self.gs.run_command(
+                'r.out.xyz'
+                ,input = 'red_sites'
+                ,output =f'{self.clean_parent}/red_sites.asc'
+            )
+
+            self.gs.run_command(
+                'r.out.xyz'
+                ,input = 'amber_sites'
+                ,output =f'{self.clean_parent}/amber_sites.asc'
+            )
+
+            ## Step 10: Proj The Files
+            self.gs.run_command(
+                'm.proj'
+                ,flags='od'
+                ,input=f'{self.clean_parent}/amber_sites.asc'
+                ,output=f'{self.clean_parent}/amber_sites_proj.asc'
+            )
+
+            self.gs.run_command(
+                'm.proj'
+                ,flags='od'
+                ,input=f'{self.clean_parent}/red_sites.asc'
+                ,output=f'{self.clean_parent}/red_sites_proj.asc'
+            )
+            
+        if shapefile == True:
+            self.gs.run_command()
+
+    def unmarked_graves_pipeline(self,lidar_fname,proj_path, low_memory, historical_file):
+        ## Startup the env
+        self.setup_grass_env(lidar_fname=lidar_fname
+                             ,proj_path=proj_path)
+        
+        ## Reading Historical Sites
+        self.historical_sites_check(historical_file=historical_file)
+
+        ## Checking Elevation
+        self.elevation_check()
+
+        ## Topology
+        self.topology_check(low_memory=low_memory)
+
+        ## Ranking and Writing
+        self.rag_ranking()
+
+        print('The pipeline has run.')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Unmarked Graves Detection Pipeline")
+
+    ## Adding Args to the Parser
+    parser.add_argument("--lidar-file", required=True, help="Path to the LiDAR .las/.laz file")
+    parser.add_argument("--proj-path", required=True, help="Path to the GRASS project directory")
+    parser.add_argument("--historical-file", required=True, help="Path to the historical sites shapefile/vector file")
+    parser.add_argument("--low-memory", action="store_true", help="Enable low memory mode")
+
+    args = parser.parse_args()
+
+    ## Run the pipeline
+    ug = UnmarkedGraves()
+    ug.unmarked_graves_pipeline(
+        lidar_fname= args.lidar_file
+        ,proj_path=args.proj_path
+        ,low_memory= args.low_memory
+        ,historical_file=args.historical_file
+    )
