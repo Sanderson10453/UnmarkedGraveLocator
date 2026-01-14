@@ -17,7 +17,7 @@ The initial part of the index takes into account a site's proximity to a place o
 For our list of historical sites, we use data from the Florida Master Site File (FMSF). <b> This dataset requires authorization from Florida Divison of Historical Records (part of the Department of State) - this can be done at this [site](https://dos.fl.gov/historical/preservation/master-site-file/documents-forms/), specifically with this [form](https://dos.fl.gov/media/708884/guide_structure_v50.pdf). Once you've been granted access - you will use the path to the files in the model. If you are having issues/or have privacy issues with accessing the data, please reach out to us! </b>
 
 ### 2. Absolute Elevation Difference
-The model uses elevation (z-values) from LiDAR .las files to search for areas (with a size estimate of around 4 feet) that are noticeably lower elevation than the areas around it. This works as Florida is, generally, exceptionally flat. After finding these areas, the model delves deeper to ensure that these areas are not just "noise" from the LiDAR file. 
+The model uses elevation (z-values) from LiDAR .las files to search for areas (with a size estimate of around 4 feet) that are noticeably lower elevation than the areas around it. This works as Florida is, generally, exceptionally flat. After finding these areas, the model delves deeper to ensure that these areas are not just "noise" from the LiDAR file. LiDAR files can be downloaded from the United States Geological Survey [site](https://apps.nationalmap.gov/lidar-explorer/#/)
 
 Once it has identified these lower elevation areas, these areas are considered in the next step of the index.
 
@@ -32,6 +32,8 @@ Once run, the model will consider the previously mentioned factors to then creat
 ## Setup
 To setup the model, we've found that using a Docker container is the easiest way - more information on Docker can be found [here](https://www.docker.com/get-started). For users who are new to Docker, I recommend using [Docker Desktop](https://www.docker.com/products/docker-desktop/), as its inferace is more user friendly and presents users with prompts.
 
+*This docker container will take ~11Gb of space*
+
 To being with, you will want to clone this git repo - using the following code:
 
 1. You should navigate to the location you want to download the files to:
@@ -43,8 +45,10 @@ cd /path/to/directory/
 2. Once in that director, run the following command to clone the repo: 
 
 ```
-git clone https://
+git clone https://gitlab.com/kristophersmith/unmarked-graves.git
 ```
+
+<b> Note: </b> At this point, it's easiest to move your historical and lidar files to the *app* subdirectory.
 
 3. Once you have the repo cloned and all the files, you will need to navigate into the git repo/directory :
 ```
@@ -53,7 +57,7 @@ cd ./git-repo-dir
 
 4. Now, you will build the docker container :
 ```
-docker build --tag unmarked_graves_grass
+docker build -t unmarked_graves_grass -f ./debian-grass.dockerfile .
 docker run --detach unmarked_graves_grass
 ```
 
