@@ -15,7 +15,7 @@ class GrassConfigs:
         GRASS_PY_PATH = subprocess.check_output(["grass", "--config", "python_path"], text=True).strip()
     elif os.name =='nt':
         grass_cmd = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat', "--config", "python_path"] 
-        GRASS_PY_PATH = subprocess.check_output(["grass", "--config", "python_path"], text=True, shell=True).strip()
+        GRASS_PY_PATH = subprocess.check_output(grass_cmd, text=True, shell=True).strip()
     else: 
             GRASS_PY_PATH = None
     
@@ -44,6 +44,7 @@ class GrassConfigs:
     emmett_reed_e = 445000
     emmett_reed_w = 441729
 
+    low_memory = True
     # def grass_env_act():
     #     activate_txt = "lidar-act"
     #     subprocess.call(activate_txt)
