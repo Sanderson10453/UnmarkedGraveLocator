@@ -550,6 +550,22 @@ class UnmarkedGraves(GrassConfigs):
             ,overwrite = True
         )
 
+         ## Optional Step 5: Create Shapefiles
+        if shapefile == True:
+
+            # Making the Raster into a vector file
+            self.gs.run_command('r.to.vect'
+                                ,input = 'red_sites_grow'
+                                ,output = 'red_sites_grow_vect'
+                                ,type = 'area')
+            
+            # Writing to Shapefile
+            self.gs.run_command('v.out.ogr'
+                                ,input = 'red_sites_grow_vect'
+                                ,output = f'{Path(__file__).parent.resolve().joinpath('outputs/red_sites.shp')}'
+                                ,format = 'ESRI_Shapefile'
+                                ,type = 'area')
+
         ## Part 2: Amber Sites
         # Step 1: Sites that are part of the 1/4 mile buffer
         self.gs.run_command(
@@ -633,7 +649,18 @@ class UnmarkedGraves(GrassConfigs):
             )
             
         if shapefile == True:
-            self.gs.run_command()
+            # Making the Raster into a vector file
+                self.gs.run_command('r.to.vect'
+                                    ,input = 'amber_sites_grow'
+                                    ,output = 'amber_sites_grow_vect'
+                                    ,type = 'area')
+                
+                # Writing to Shapefile
+                self.gs.run_command('v.out.ogr'
+                                    ,input = 'amber_sites_grow_vect'
+                                    ,output = f'{Path(__file__).parent.resolve().joinpath('outputs/amber_sites.shp')}'
+                                    ,format = 'ESRI_Shapefile'
+                                    ,type = 'area')
 
     def unmarked_graves_pipeline(self,lidar_fname,proj_path, low_memory, historical_file):
         ## Startup the env
