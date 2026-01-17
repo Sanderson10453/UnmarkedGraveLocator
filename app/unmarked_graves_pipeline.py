@@ -94,6 +94,7 @@ class UnmarkedGraves(GrassConfigs):
         # Updating Attributes
         self.project_path = project_path
         self.lidar_file = lidar_f
+        self.dbase = self.project_path.parent
         
         # Appending python path
         sys.path.append(GrassConfigs.GRASS_PY_PATH)
@@ -113,18 +114,36 @@ class UnmarkedGraves(GrassConfigs):
 
         ## Checking if Project & Mapset has been created
         if not self.project_path.exists():
-            try:
-                gs.create_project(self.project_path
-                                ,epsg= self.las_espg
-                                ,overwrite = True)   #Will not overwrite current
 
-            except PermissionError as e:
-                print('Running in Grass, cant make dir')
+            # Checking if the database exists - if not, create location and project
+            # If Linux
+            if os.name == 'posix':
+                # Creating Database and Perm. location
+                subprocess.Popen(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path}"])
 
-        
-        #Checking the session is running
-        gj.init(Path(self.project_path))
-        self._grass_initialized = True
+                # Creating the Project
+                subprocess.Popen(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path.joinpath('unmarked-graves')}"])
+
+            # If Windows
+            elif os.name =='nt':
+                 # Creating Database and Perm. location
+                grass_perm = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
+                            , "-c" ,f"epsg:{self.las_espg}", "-e", f"{self.project_path}"] 
+                subprocess.Popen(grass_perm, shell=True)
+
+                # Creating the Project
+                grass_proj = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
+                            , "-c" , "-e", f"{self.project_path.joinpath('unmarked-graves')}"] 
+                subprocess.Popen(grass_perm, shell=True)
+
+            #Checking the session is running
+            gj.init(Path(self.project_path.joinpath('unmarked-graves')))
+            self._grass_initialized = True
+            
+        else: 
+            #Checking the session is running
+            gj.init(Path(self.project_path))
+            self._grass_initialized = True
 
     def list_maps(self):
 
