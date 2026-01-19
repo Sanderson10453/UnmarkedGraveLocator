@@ -129,12 +129,12 @@ class UnmarkedGraves(GrassConfigs):
                  # Creating Database and Perm. location
                 grass_perm = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
                             , "-c" ,f"epsg:{self.las_espg}", "-e", f"{self.project_path}"] 
-                subprocess.Popen(grass_perm, shell=True)
+                subprocess.run(grass_perm, check= True, shell=True)
 
                 # Creating the Project
                 grass_proj = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
                             , "-c" , "-e", f"{self.project_path.joinpath('unmarked-graves')}"] 
-                subprocess.Popen(grass_perm, shell=True)
+                subprocess.run(grass_perm, check= True, shell=True)
 
             #Checking the session is running
             gj.init(Path(self.project_path.joinpath('unmarked-graves')))
@@ -704,7 +704,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unmarked Graves Detection Pipeline")
 
     ## Adding Args to the Parser
-    parser.add_argument("--lidar-file", required=True, help="Path to the LiDAR .las/.laz file")
+    parser.add_argument("--lidar-file", required=True, help="Path to the LiDAR .las file")
     parser.add_argument("--proj-path", required=True, help="Path to the GRASS project directory")
     parser.add_argument("--historical-file", required=True, help="Path to the historical sites shapefile/vector file")
     parser.add_argument("--low-memory", action="store_true", help="Enable low memory mode")
