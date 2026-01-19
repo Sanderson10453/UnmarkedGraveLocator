@@ -55,17 +55,22 @@ git clone https://gitlab.com/kristophersmith/unmarked-graves.git
 cd ./git-repo-dir
 ```
 
-4. Now, you will build the docker container :
+4. Now, you will build the docker image :
 ```
-docker build -t unmarked_graves_grass -f ./debian-grass.dockerfile .
-docker run --detach unmarked_graves_grass
-```
-
-5. Check that this ran correctly - you should see an item called "unmarked_graves_grass":
-```
-docker container ls
+docker build -t unmarked-graves -f ./debian-grass.dockerfile .
 ```
 
+5. Run the unmarked graves script in the image
+if on a windows: 
+```
+docker run -v "/path/to/where/you/want/outputs":"/app/output" unmarked-graves^
+		 python ./unmarked_graves_pipeline.py --lidar-file "./test-cases/name-of-your-lidar-file.las"^
+		  --historical-file "./test-cases
+```
+if on a mac/linux:
+```
+docker run -v "/path/to/where/you/want/outputs":"/app/output" unmarked-graves python ./unmarked_graves_pipeline.py --lidar
+```
 <b> Note: </b> Linux/Mac users may have to add sudo in front of docker commands
 
 ## Running the Model
