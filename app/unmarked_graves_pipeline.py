@@ -14,16 +14,8 @@ import os
 import subprocess
 
 #Geospatial 
-import geopandas as gp
 import laspy
-from pyproj import CRS, Transformer
-import pdal
-
-#Numpy
-import numpy as np
-
-#Timing
-import time
+from pyproj import CRS
 
 # For cli
 import argparse
@@ -65,8 +57,9 @@ class UnmarkedGraves(GrassConfigs):
 
 
     def setup_grass_env(self
-                        ,proj_path : str|Path
-                        ,lidar_fname : str|Path):
+                        # ,proj_path : str|Path
+                        # ,lidar_fname : str|Path
+                        ):
         """
         This method will start the grass script environment and check if the specified project/location exist.
         
@@ -79,21 +72,9 @@ class UnmarkedGraves(GrassConfigs):
             return
         
 
-        # full path to new project (formerly: location)
-        if isinstance(proj_path, Path):  
-            project_path = proj_path
-        elif proj_path is str:
-            project_path = Path(proj_path)
-
-        # LiDAR File Construction
-        if isinstance(lidar_fname, Path):  
-            lidar_f = lidar_fname
-        elif lidar_fname is str:
-            lidar_f = Path(lidar_fname)
-
         # Updating Attributes
-        self.project_path = project_path
-        self.lidar_file = lidar_f
+        # self.project_path = Path(proj_path)
+        # self.lidar_file = Path(lidar_fname)
         self.dbase = self.project_path.parent
         
         # Appending python path
@@ -111,6 +92,7 @@ class UnmarkedGraves(GrassConfigs):
 
         # Grabbing ESPG from laspy file
         self.las_espg = CRS.from_wkt(str(laspy.read(self.lidar_file).header.parse_crs())).sub_crs_list[0].to_epsg()
+        
 
         ## Checking if Project & Mapset has been created
         if not self.project_path.exists():
@@ -119,10 +101,10 @@ class UnmarkedGraves(GrassConfigs):
             # If Linux
             if os.name == 'posix':
                 # Creating Database and Perm. location
-                subprocess.Popen(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path}"])
+                subprocess.run(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path}"], check=True)
 
                 # Creating the Project
-                subprocess.Popen(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path.joinpath('unmarked-graves')}"])
+                subprocess.run(["grass", "-c", "-e", f"{self.project_path.joinpath('unmarked-graves')}"], check=True)
 
             # If Windows
             elif os.name =='nt':
@@ -134,10 +116,11 @@ class UnmarkedGraves(GrassConfigs):
                 # Creating the Project
                 grass_proj = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
                             , "-c" , "-e", f"{self.project_path.joinpath('unmarked-graves')}"] 
-                subprocess.run(grass_perm, check= True, shell=True)
+                subprocess.run(grass_proj, check= True, shell=True)
 
             #Checking the session is running
-            gj.init(Path(self.project_path.joinpath('unmarked-graves')))
+            self.mapset_path = Path(self.project_path.joinpath('unmarked-graves'))
+            gj.init(self.mapset_path if self.mapset_path.exists() else self.project_path)
             self._grass_initialized = True
             
         else: 
@@ -153,8 +136,9 @@ class UnmarkedGraves(GrassConfigs):
         return map_ls
 
     def historical_sites_check(self
-                               ,historical_file: str|Path
-                               ,overwrite = False):
+                            #    ,historical_file: str|Path
+                               ,overwrite = False
+                               ):
         """
         This method will be the pipeline component for the first component of our RAG model - whether there is a historic site
             within a set distance of the site. Sites within a quarter mile of a church will be most rewarded, while sites
@@ -185,14 +169,14 @@ class UnmarkedGraves(GrassConfigs):
         ## Importing the FMSF
 
         #Creating a proper path from param
-        if historical_file is None:
-            fmsf = Path(f"{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}").resolve()    # Post the FMSF in gitlab
+        # if historical_file is None:
+        #     fmsf = Path(f"{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}").resolve()    # Post the FMSF in gitlab
         
-        if isinstance(historical_file, Path):
-            fmsf = historical_file
+        # if isinstance(historical_file, Path):
+        #     fmsf = historical_file
 
-        elif isinstance(historical_file, str):
-            fmsf = Path(historical_file)
+        # elif isinstance(historical_file, str):
+        #     fmsf = Path(historical_file)
 
         if overwrite == False:
             'check if buffer exists'
@@ -204,12 +188,12 @@ class UnmarkedGraves(GrassConfigs):
             #Importing
             self.gs.run_command(
                     'v.import'
-                    ,input = fmsf
+                    ,input = self.historical_file
                             )
 
             ## Adding the Buffer
             #Gettng Vector Map Name
-            self.vector_map_fname = fmsf.stem
+            self.vector_map_fname = self.historical_file.stem
 
             #Runing the command
             self.gs.run_command(
@@ -265,7 +249,8 @@ class UnmarkedGraves(GrassConfigs):
         # File Name without Ext
         self.clean_fname = self.lidar_file.stem
         self.clean_path = self.lidar_file.stem
-        self.clean_parent = self.lidar_file.parent
+        # self.clean_parent = self.lidar_file.parent
+        self.clean_parent = Path(__file__).resolve().parent.joinpath('output')
 
 
         ## Creating list of maps in mapset
@@ -581,7 +566,7 @@ class UnmarkedGraves(GrassConfigs):
             # Writing to Shapefile
             self.gs.run_command('v.out.ogr'
                                 ,input = 'red_sites_grow_vect'
-                                ,output = f"{Path(__file__).parent.resolve().joinpath('outputs/red_sites.shp')}"
+                                ,output = f"{self.clean_parent.joinpath('red_sites.shp')}"
                                 ,format = 'ESRI_Shapefile'
                                 ,type = 'area')
 
@@ -643,28 +628,29 @@ class UnmarkedGraves(GrassConfigs):
             self.gs.run_command(
                 'r.out.xyz'
                 ,input = 'red_sites'
-                ,output =f'{self.clean_parent}/red_sites.asc'
+                ,output =f"{self.clean_parent.joinpath('red_sites.asc')}"
             )
 
             self.gs.run_command(
                 'r.out.xyz'
                 ,input = 'amber_sites'
-                ,output =f'{self.clean_parent}/amber_sites.asc'
+                ,output =f"{self.clean_parent.joinpath('amber_sites.asc')}"
             )
+
 
             ## Step 10: Proj The Files
             self.gs.run_command(
                 'm.proj'
                 ,flags='od'
-                ,input=f'{self.clean_parent}/amber_sites.asc'
-                ,output=f'{self.clean_parent}/amber_sites_proj.asc'
+                ,input=f"{self.clean_parent.joinpath('amber_sites.asc')}"
+                ,output=f"{self.clean_parent.joinpath('amber_sites_proj.asc')}"
             )
 
             self.gs.run_command(
                 'm.proj'
                 ,flags='od'
-                ,input=f'{self.clean_parent}/red_sites.asc'
-                ,output=f'{self.clean_parent}/red_sites_proj.asc'
+                ,input=f"{self.clean_parent.joinpath('red_sites.asc')}"
+                ,output=f"{self.clean_parent.joinpath('red_sites_proj.asc')}"
             )
             
         if shapefile == True:
@@ -677,23 +663,29 @@ class UnmarkedGraves(GrassConfigs):
                 # Writing to Shapefile
                 self.gs.run_command('v.out.ogr'
                                     ,input = 'amber_sites_grow_vect'
-                                    ,output = f"{Path(__file__).parent.resolve().joinpath('outputs/amber_sites.shp')}"
+                                    ,output = f"{self.clean_parent.joinpath('amber_sites.shp')}"
                                     ,format = 'ESRI_Shapefile'
                                     ,type = 'area')
 
     def unmarked_graves_pipeline(self,lidar_fname,proj_path, low_memory, historical_file):
+
+        # Save Args
+        self.lidar_file = Path(lidar_fname)
+        self.project_path = Path(proj_path)
+        self.historical_file = Path(historical_file)
+        self.low_memory = low_memory
+
         ## Startup the env
-        self.setup_grass_env(lidar_fname=lidar_fname
-                             ,proj_path=proj_path)
+        self.setup_grass_env()
         
         ## Reading Historical Sites
-        self.historical_sites_check(historical_file=historical_file)
+        self.historical_sites_check()
 
         ## Checking Elevation
         self.elevation_check()
 
         ## Topology
-        self.topology_check(low_memory=low_memory)
+        self.topology_check()
 
         ## Ranking and Writing
         self.rag_ranking()
