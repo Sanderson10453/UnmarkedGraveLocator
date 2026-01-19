@@ -581,7 +581,7 @@ class UnmarkedGraves(GrassConfigs):
             # Writing to Shapefile
             self.gs.run_command('v.out.ogr'
                                 ,input = 'red_sites_grow_vect'
-                                ,output = f'{Path(__file__).parent.resolve().joinpath('outputs/red_sites.shp')}'
+                                ,output = f"{Path(__file__).parent.resolve().joinpath('outputs/red_sites.shp')}"
                                 ,format = 'ESRI_Shapefile'
                                 ,type = 'area')
 
@@ -677,7 +677,7 @@ class UnmarkedGraves(GrassConfigs):
                 # Writing to Shapefile
                 self.gs.run_command('v.out.ogr'
                                     ,input = 'amber_sites_grow_vect'
-                                    ,output = f'{Path(__file__).parent.resolve().joinpath('outputs/amber_sites.shp')}'
+                                    ,output = f"{Path(__file__).parent.resolve().joinpath('outputs/amber_sites.shp')}"
                                     ,format = 'ESRI_Shapefile'
                                     ,type = 'area')
 
