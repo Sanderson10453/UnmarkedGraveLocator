@@ -186,7 +186,7 @@ class UnmarkedGraves(GrassConfigs):
 
         #Creating a proper path from param
         if historical_file is None:
-            fmsf = Path(f'{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}').resolve()    # Post the FMSF in gitlab
+            fmsf = Path(f"{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}").resolve()    # Post the FMSF in gitlab
         
         if isinstance(historical_file, Path):
             fmsf = historical_file
