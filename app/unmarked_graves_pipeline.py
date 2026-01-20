@@ -104,7 +104,7 @@ class UnmarkedGraves(GrassConfigs):
                 subprocess.run(["grass", "-c", f"epsg:{self.las_espg}", "-e", f"{self.project_path}"], check=True)
 
                 # Creating the Project
-                subprocess.run(["grass", "-c", "-e", f"{self.project_path.joinpath('unmarked-graves')}"], check=True)
+                # subprocess.run(["grass", "-c", "-e", f"{self.project_path.joinpath('unmarked-graves')}"], check=True)
 
             # If Windows
             elif os.name =='nt':
@@ -114,13 +114,13 @@ class UnmarkedGraves(GrassConfigs):
                 subprocess.run(grass_perm, check= True, shell=True)
 
                 # Creating the Project
-                grass_proj = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
-                            , "-c" , "-e", f"{self.project_path.joinpath('unmarked-graves')}"] 
-                subprocess.run(grass_proj, check= True, shell=True)
+                # grass_proj = [r'C:\\Program Files\\GRASS GIS 8.4\\grass84.bat'
+                #             , "-c" , "-e", f"{self.project_path.joinpath('unmarked-graves')}"] 
+                # subprocess.run(grass_proj, check= True, shell=True)
 
             #Checking the session is running
-            self.mapset_path = Path(self.project_path.joinpath('unmarked-graves'))
-            gj.init(self.mapset_path if self.mapset_path.exists() else self.project_path)
+            # self.mapset_path = Path(self.project_path.joinpath('unmarked-graves'))
+            gj.init(self.project_path)
             self._grass_initialized = True
             
         else: 
@@ -165,18 +165,6 @@ class UnmarkedGraves(GrassConfigs):
 
         ## Attributes
         existance = True   # Assuming vector map does not exist
-        
-        ## Importing the FMSF
-
-        #Creating a proper path from param
-        # if historical_file is None:
-        #     fmsf = Path(f"{Path(__file__).cwd().joinpath(r'Duval_Sites.shp')}").resolve()    # Post the FMSF in gitlab
-        
-        # if isinstance(historical_file, Path):
-        #     fmsf = historical_file
-
-        # elif isinstance(historical_file, str):
-        #     fmsf = Path(historical_file)
 
         if overwrite == False:
             'check if buffer exists'
@@ -220,7 +208,7 @@ class UnmarkedGraves(GrassConfigs):
 
     def elevation_check(self
                         ,denoise = True
-                        ,low_memory = True
+                        ,low_memory = False
                         ,overwrite = False):        
         """
         This method will be the pipeline component for the next component of our RAG model - does an area have lower elevation than the areas 
@@ -247,8 +235,8 @@ class UnmarkedGraves(GrassConfigs):
         # self.lidar_file = lidar_file
 
         # File Name without Ext
-        self.clean_fname = self.lidar_file.stem
-        self.clean_path = self.lidar_file.stem
+        self.clean_fname = (self.lidar_file.stem)[-15:]
+        self.clean_path = (self.lidar_file.stem)[-15:]
         # self.clean_parent = self.lidar_file.parent
         self.clean_parent = Path(__file__).resolve().parent.joinpath('output')
 
@@ -257,29 +245,56 @@ class UnmarkedGraves(GrassConfigs):
         map_ls = self.list_maps()
 
         ## Elevation Testing
+        ## Setting the region
+        extent = self.gs.read_command(
+            "r.in.pdal"
+            ,flags ='sg'
+            ,input = self.lidar_file
+            ,overwrite = True
+            ,output = self.clean_fname[-15:]
+        )
 
-        # Check if file exists
-        if f'{self.clean_fname[-15:]}_mean' in map_ls : 
-            print('Elevation Layer Exists')
-        else:
-            ## Reading the las
-            self.gs.run_command(
-                "r.in.pdal"
-                ,input = self.lidar_file
-                ,method = 'mean'
-                ,overwrite = True
-                ,resolution = 1
-                ,output = f'{self.clean_fname[-15:]}_mean'  
+        #Create Extent
+        extent_dict = {}
+        extent_split = extent.split()
+        for ext_str in extent_split:
+            k,v = ext_str.split('=')
+            extent_dict[k] = float(v)
 
-            )
+
+        self.gs.run_command(
+            'g.region'
+            ,n= extent_dict['n']
+            ,s=extent_dict['s']
+            ,w=extent_dict['w']
+            ,e=extent_dict['e']
+            ,t=extent_dict['t']
+            ,b=extent_dict['b']
+            ,grow = 5280
+        )
+
+
+        ## Reading the las
+        self.gs.run_command(
+            "r.in.pdal"
+            ,input = self.lidar_file
+            ,method = 'mean'
+            ,overwrite = True
+            ,resolution = 1
+            # ,output = f'{self.clean_fname[-15:]}_mean'  
+                ,output = f'{self.clean_fname}_mean'  
+
+        )
 
         ## Writing Neighborhood Models to Compare Elev
 
         ## Minimum Output
         self.gs.run_command(
             'r.neighbors'
-            ,input=f'{self.clean_fname[-15:]}_mean'
-            ,output = f'{self.clean_fname[-15:]}_mean_neighbor'
+            # ,input=f'{self.clean_fname[-15:]}_mean'
+            ,input=f'{self.clean_fname}_mean'
+            # ,output = f'{self.clean_fname[-15:]}_mean_neighbor'
+            ,output = f'{self.clean_fname}_mean_neighbor'
             ,method = 'average'
             ,size = 15
             ,weighting_function = 'gaussian'
@@ -291,7 +306,8 @@ class UnmarkedGraves(GrassConfigs):
         # Calculation
         self.gs.run_command(
             'r.mapcalc'
-            ,expression = f"diff = {self.clean_fname[-15:]}_mean - {self.clean_fname[-15:]}_mean_neighbor"
+            # ,expression = f"diff = {self.clean_fname[-15:]}_mean - {self.clean_fname[-15:]}_mean_neighbor"
+            ,expression = f"diff = {self.clean_fname}_mean - {self.clean_fname}_mean_neighbor"
             ,overwrite = True
                     )
         
@@ -344,7 +360,7 @@ class UnmarkedGraves(GrassConfigs):
             )
     
     
-    def topology_check(self, low_memory = True):
+    def topology_check(self, low_memory = False):
         """
         This method will be the pipeline component for the last component of our RAG model - whether the slope/geomorphology is sloped downward,
             but flat enough to be conducive for a grave.
@@ -523,6 +539,8 @@ class UnmarkedGraves(GrassConfigs):
         :param low_memory: True, will delete the intermediate map files created while creating the filter. Set to False, they will be preserved
         """
 
+        # Attributes
+ 
         ### Create Index of PLaces that meet highest criteria
         ## Part 1: Red Sites
 
@@ -667,13 +685,14 @@ class UnmarkedGraves(GrassConfigs):
                                     ,format = 'ESRI_Shapefile'
                                     ,type = 'area')
 
-    def unmarked_graves_pipeline(self,lidar_fname,proj_path, low_memory, historical_file):
+    def unmarked_graves_pipeline(self,lidar_fname,proj_path, low_memory, historical_file, shapefile):
 
         # Save Args
         self.lidar_file = Path(lidar_fname)
         self.project_path = Path(proj_path)
         self.historical_file = Path(historical_file)
         self.low_memory = low_memory
+        self.shapefile = shapefile
 
         ## Startup the env
         self.setup_grass_env()
@@ -700,6 +719,7 @@ if __name__ == "__main__":
     parser.add_argument("--proj-path", required=True, help="Path to the GRASS project directory")
     parser.add_argument("--historical-file", required=True, help="Path to the historical sites shapefile/vector file")
     parser.add_argument("--low-memory", action="store_true", help="Enable low memory mode")
+    # parser.add_argument("--shapefile", action="store_false", help="Path to the LiDAR .las file")
 
     args = parser.parse_args()
 
@@ -710,4 +730,5 @@ if __name__ == "__main__":
         ,proj_path=args.proj_path
         ,low_memory= args.low_memory
         ,historical_file=args.historical_file
+        # ,shapefile=args.shapefile
     )
