@@ -65,15 +65,29 @@ if on a windows:
 ```
 docker run -v "/path/to/where/you/want/outputs":"/app/output" unmarked-graves^
 		 python ./unmarked_graves_pipeline.py --lidar-file "./test-cases/name-of-your-lidar-file.las"^
-		  --historical-file "./test-cases
+		  --historical-file "./test-cases/name-of-historical-file.shp^
+		  --proj-path "project-name"
 ```
 if on a mac/linux:
 ```
-docker run -v "/path/to/where/you/want/outputs":"/app/output" unmarked-graves python ./unmarked_graves_pipeline.py --lidar
+docker run -v "/path/to/where/you/want/outputs":"/app/output" unmarked-graves \
+		 python ./unmarked_graves_pipeline.py --lidar-file "./test-cases/name-of-your-lidar-file.las" \
+		  --historical-file "./test-cases/Duval_sites.shp \
+		  --proj-path "unmarked-graves"
+```
+
+For example:
+```
+docker run -v "C:\users\spenser\Documents\unmarked":"/app/output" unmarked-graves^
+		 python ./unmarked_graves_pipeline.py --lidar-file "./test-cases/USGS_LPC_FL_Peninsular_FDEM_2018_D19_DRRA_LID2019_218755_E.las"^
+		  --historical-file "./test-cases/name-of-historical-file.shp^
+		  --proj-path "project-name"
+
 ```
 <b> Note: </b> Linux/Mac users may have to add sudo in front of docker commands
 
-## Running the Model
+## Results
+After running these commands, you should find two output text files - red_sites.asc and amber_sites.asc. These contain coordinates to the points of interest.
 
 
 ## License
