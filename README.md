@@ -22,7 +22,7 @@ The model uses elevation (z-values) from LiDAR .las files to search for areas (w
 Once it has identified these lower elevation areas, these areas are considered in the next step of the index.
 
 ### 3. Topological Classification
-Finally, the current model uses topological classification to further add to the index as to what may be an unmarked gravesite. Again, as this model is based on terrain in Florida - tolerances are coded with reasonably flat terrain in mind. When checking topology, the model looks for areas that are: concave, as these areas would signify downward sloping due to an unmarked grave underfoot; and, slightly sloped, as this could be an area with multiple graves.
+Finally, the current model uses topological classification to further add to the index as to what may be an unmarked gravesite. Again, as this model is based on terrain in Florida - tolerances are coded with reasonably flat terrain in mind. When checking topology, the model looks for areas that are: concave up, as these areas would signify downward sloping due to an unmarked grave underfoots. Research has shown that gravesites over time move from concave down (due to the newly removed soil being packed on the recently buried remains); to flat (as the removed soil starts to pack in); finally, to concave down (as the remains decay and the soil can pack back in)[^3]. 
 
 
 ### Output
@@ -30,6 +30,7 @@ Once run, the model will consider the previously mentioned factors to then creat
 
 
 ## Setup
+<b> This model is currently in Beta mode and will be updated - see changelog </b>
 To setup the model, we've found that using a Docker container is the easiest way - more information on Docker can be found [here](https://www.docker.com/get-started). For users who are new to Docker, I recommend using [Docker Desktop](https://www.docker.com/products/docker-desktop/), as its inferace is more user friendly and presents users with prompts.
 
 *This docker container will take ~11Gb of space*
@@ -96,4 +97,6 @@ MIT Licensed
 
 [^1]: Geomorphological and geoforensic interpretation of maps, aerial imagery, conditions of diggability and the colour-coded RAG prioritization system in searches for criminal burials, Laurance Donnelly; Mark Harrison, 2013
 
-[^2]:  A GIS-based Quantitative Approach for the Search of Clandestine Graves, Italy , Roberta Somma, Maria Cascio, et. al. 2017
+[^2]: A GIS-based Quantitative Approach for the Search of Clandestine Graves, Italy , Roberta Somma, Maria Cascio, et. al. 2017
+
+[^3]: Locating and characterizing burials using 3D ground-penetrating radar (GPR) and terrestrial laser scanning (TLS) at the historic Mueschke Cemetery, Houston, Texas
